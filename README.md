@@ -45,7 +45,7 @@ Flow:
 │   ├── audio-worklet.js
 │   ├── index.html
 │   └── styles.css
-├── .env.example
+├── .env
 └── .gitignore
 ```
 
@@ -114,6 +114,55 @@ Open:
 ```text
 http://127.0.0.1:8787
 ```
+
+## Deploy publicly
+
+PitchPanel AI is a single Node server that serves the static site and mints short-lived AssemblyAI tokens. Any platform that runs Node and exposes HTTPS works (Render, Railway, Fly.io, etc.).
+
+### Option A: Render (recommended)
+
+1. Push this repo to GitHub.
+2. Create a [Render](https://render.com) account and click **New → Blueprint**.
+3. Connect the GitHub repo. Render reads `render.yaml` and creates the web service.
+4. When prompted, set `ASSEMBLYAI_API_KEY` to your AssemblyAI API key.
+5. Deploy. Render assigns a public URL like `https://pitchpanel-ai.onrender.com`.
+6. Open the URL in a browser and start a pitch session. Microphone access requires HTTPS, which Render provides automatically.
+
+### Option B: Railway
+
+1. Push the repo to GitHub.
+2. Create a [Railway](https://railway.app) project from the repo.
+3. Add an environment variable: `ASSEMBLYAI_API_KEY=your-key`.
+4. Set the start command to `npm start` if Railway does not detect it automatically.
+5. Generate a public domain under **Settings → Networking**.
+6. Visit the generated URL.
+
+### Option C: Any VPS or container host
+
+1. Install Node.js 18+ on the server.
+2. Clone the repo and run:
+
+```bash
+npm install
+export ASSEMBLYAI_API_KEY=your-key
+export NODE_ENV=production
+export PORT=8787
+npm start
+```
+
+3. Put nginx or Caddy in front for HTTPS and proxy to `localhost:8787`.
+4. Open your domain in a browser.
+
+### Environment variables
+
+| Variable | Required | Description |
+| --- | --- | --- |
+| `ASSEMBLYAI_API_KEY` | Yes | Server-side AssemblyAI key used to mint temporary voice tokens |
+| `PORT` | No | HTTP port (platforms like Render set this automatically) |
+| `HOST` | No | Bind address (default `0.0.0.0` for public deployment) |
+| `NODE_ENV` | No | Set to `production` in deployed environments |
+
+The `/api/voice-token` route is rate-limited to 10 requests per IP per minute to reduce API key abuse.
 
 ## Security Notes
 

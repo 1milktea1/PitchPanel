@@ -5,7 +5,13 @@ import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL(".", import.meta.url));
 const siteRoot = join(root, "site");
+const isProduction = process.env.NODE_ENV === "production";
+const host = process.env.HOST || "0.0.0.0";
 const port = Number(process.env.PORT || readEnv().PORT || 8787);
+
+const TOKEN_RATE_WINDOW_MS = 60_000;
+const TOKEN_RATE_MAX = 10;
+const tokenRateByIp = new Map();
 
 function readEnv() {
   const envPath = join(root, ".env");
@@ -36,6 +42,8 @@ const types = {
 };
 
 const server = createServer(async (req, res) => {
+  setSecurityHeaders(res);
+
   const url = new URL(req.url || "/", `http://${req.headers.host}`);
 
   if (url.pathname === "/api/health") {
@@ -44,7 +52,17 @@ const server = createServer(async (req, res) => {
   }
 
   if (url.pathname === "/api/voice-token") {
-    await handleToken(res);
+    if (req.method !== "GET" && req.method !== "POST") {
+      sendJson(res, 405, { error: "Method not allowed." });
+      return;
+    }
+
+    await handleToken(req, res);
+    return;
+  }
+
+  if (req.method !== "GET" && req.method !== "HEAD") {
+    sendJson(res, 405, { error: "Method not allowed." });
     return;
   }
 
@@ -57,14 +75,33 @@ const server = createServer(async (req, res) => {
     return;
   }
 
-  res.writeHead(200, { "content-type": types[extname(filePath)] || "application/octet-stream" });
+  const headers = { "content-type": types[extname(filePath)] || "application/octet-stream" };
+  if (isProduction && extname(filePath) !== ".html") {
+    headers["cache-control"] = "public, max-age=86400";
+  }
+
+  res.writeHead(200, headers);
+  if (req.method === "HEAD") {
+    res.end();
+    return;
+  }
+
   createReadStream(filePath).pipe(res);
 });
 
-async function handleToken(res) {
+async function handleToken(req, res) {
+  const clientIp = getClientIp(req);
+
+  if (isRateLimited(clientIp)) {
+    sendJson(res, 429, { error: "Too many token requests. Try again in a minute." });
+    return;
+  }
+
   if (!env.ASSEMBLYAI_API_KEY) {
     sendJson(res, 500, {
-      error: "Missing ASSEMBLYAI_API_KEY. Add it to .env on the server."
+      error: isProduction
+        ? "Voice service is not configured."
+        : "Missing ASSEMBLYAI_API_KEY. Add it to .env on the server."
     });
     return;
   }
@@ -79,7 +116,7 @@ async function handleToken(res) {
     if (!response.ok) {
       sendJson(res, response.status, {
         error: "AssemblyAI token request failed.",
-        details: payload
+        ...(isProduction ? {} : { details: payload })
       });
       return;
     }
@@ -88,9 +125,40 @@ async function handleToken(res) {
   } catch (error) {
     sendJson(res, 502, {
       error: "Could not reach AssemblyAI token endpoint.",
-      details: error instanceof Error ? error.message : String(error)
+      ...(isProduction
+        ? {}
+        : { details: error instanceof Error ? error.message : String(error) })
     });
   }
+}
+
+function getClientIp(req) {
+  const forwarded = req.headers["x-forwarded-for"];
+  if (typeof forwarded === "string" && forwarded.length > 0) {
+    return forwarded.split(",")[0].trim();
+  }
+
+  return req.socket.remoteAddress || "unknown";
+}
+
+function isRateLimited(clientIp) {
+  const now = Date.now();
+  const current = tokenRateByIp.get(clientIp);
+
+  if (!current || now - current.windowStart > TOKEN_RATE_WINDOW_MS) {
+    tokenRateByIp.set(clientIp, { windowStart: now, count: 1 });
+    return false;
+  }
+
+  current.count += 1;
+  return current.count > TOKEN_RATE_MAX;
+}
+
+function setSecurityHeaders(res) {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.setHeader("Permissions-Policy", "microphone=(self)");
 }
 
 function sendJson(res, status, payload) {
@@ -98,6 +166,7 @@ function sendJson(res, status, payload) {
   res.end(JSON.stringify(payload));
 }
 
-server.listen(port, "127.0.0.1", () => {
-  console.log(`PitchPanel AI is running at http://127.0.0.1:${port}`);
+server.listen(port, host, () => {
+  const label = host === "0.0.0.0" ? "localhost" : host;
+  console.log(`PitchPanel AI is running at http://${label}:${port}`);
 });
