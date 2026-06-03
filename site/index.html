@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PitchPanel AI</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="stage">
+        <div class="stage-copy">
+          <div class="eyebrow">Live founder pressure test</div>
+          <h1>PitchPanel AI</h1>
+          <p>
+            Pick three investors, give a 30-second pitch, answer the heat, and leave with a
+            scorecard that tells you what actually broke.
+          </p>
+        </div>
+        <div class="session-strip" aria-live="polite">
+          <div>
+            <span>Active judge</span>
+            <strong id="activeJudge">Panel</strong>
+          </div>
+          <div>
+            <span>Pitch clock</span>
+            <strong><span id="secondsLeft">30</span>s</strong>
+          </div>
+          <div>
+            <span>Status</span>
+            <strong id="statusText">Select exactly 3 judges.</strong>
+          </div>
+        </div>
+      </section>
+
+      <section class="workspace">
+        <div class="panel-column">
+          <div class="section-heading">
+            <h2>Select 3 judges</h2>
+            <span id="selectedCount">0/3</span>
+          </div>
+          <div id="judgeGrid" class="judge-grid"></div>
+          <div class="controls">
+            <button id="startButton" class="primary" type="button" disabled>Start pitch</button>
+            <button id="stopButton" class="secondary" type="button" disabled>Stop</button>
+          </div>
+          <div id="notice" class="notice hidden" role="status"></div>
+        </div>
+
+        <div class="live-column">
+          <div id="timerRing" class="timer-ring" style="--progress: 1">
+            <strong id="timerNumber">30</strong>
+            <span>seconds</span>
+          </div>
+          <div class="transcript-panel">
+            <div class="section-heading">
+              <h2>Live exchange</h2>
+            </div>
+            <div id="transcriptLog" class="transcript-log">
+              <p class="empty-state">The panel transcript will appear here once the session starts.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="verdictCard" class="verdict-card hidden"></section>
+    </main>
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>
